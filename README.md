@@ -7,3 +7,8 @@ docker compose up
 # Или 
 docker compose up --build
 ```
+
+frontend: http://localhost:8080
+backend: http://localhost:8000
+
+api docs: http://localhost:8000/docs
