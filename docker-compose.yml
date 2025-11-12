@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  frontend:
+    image: review-insight/front:dev
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./apps/frontend/src:/app/src
+      - ./apps/frontend/index.html:/app/index.html
+      - ./apps/frontend/vite.config.ts:/app/vite.config.ts
+      - ./apps/frontend/vite.config.server.ts:/app/vite.config.server.ts
+      - ./apps/frontend/tsconfig.json:/app/tsconfig.json
+      - ./apps/frontend/server:/app/server
+      - ./apps/frontend/public:/app/public
+    command: pnpm dev --host 0.0.0.0
