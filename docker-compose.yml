@@ -1,8 +1,24 @@
 version: "3.9"
 
 services:
+  backend:
+    image: review-insight/back
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONPATH=/app/src
+      - ALLOWED_ORIGINS=http://localhost:8080
+      - LOG_LEVEL=info
+    volumes:
+      - ./apps/backend/src:/app/src
+      - ./apps/backend/tests:/app/tests
+    ports:
+      - "8000:8000"
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
   frontend:
-    image: review-insight/front:dev
+    image: review-insight/front:latest
     build:
       context: ./apps/frontend
       dockerfile: Dockerfile
