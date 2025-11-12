@@ -1,5 +1,7 @@
 from typing import List, Dict
 import random
+import requests
+import json
 
 def fake_sentiment() -> str:
     return random.choice(["positive", "neutral", "negative"])
@@ -19,3 +21,104 @@ def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
             }
         )
     return result
+
+def analyze_review(review_text: str) -> dict:
+    """
+    Отправляет отзыв на анализ и возвращает JSON-объект результата.
+    """
+    url = "http://localhost:11434/api/generate"
+
+    payload = {
+        "model": "mistral",
+        "prompt": review_text,
+        "context": [],
+        "stream": False,
+        "system": (
+            "Ты - профессиональный аналитик отзывов со стажем 10 лет. "
+            "Тебе будет отправлен текст отзыва. Вот твои задачи: "
+            "- выделить ключевые темы отзыва "
+            "- определить тональность отзыва (нейтральная, положительная, отрицательная) "
+            "- для каждой темы отзыва определить тональность темы (нейтральная, положительная, отрицательная). "
+            "Ответ нужно выдавать в виде json файла. "
+            "Вот пример ответа для отзыва: \"Доставка была быстрой, но качество товара оставляет желать лучшего. Упаковка хорошая.\" "
+            "{\"review_analysis\":{\"overall_sentiment\":\"нейтральная\",\"key_themes\":[{\"theme\":\"доставка\",\"sentiment\":\"положительная\"},{\"theme\":\"качество товара\",\"sentiment\":\"отрицательная\"},{\"theme\":\"упаковка\",\"sentiment\":\"положительная\"}]}} "
+            "При выборе тем используй ТОЛЬКО следующие формулировки. "
+            "Должно использоваться что-то СТРОГО из этих критериев: "
+            "(Качество товара, функциональность, дизайн, материалы, сборка, соответствие описанию, комплектация, размеры, простота использования, "
+            "работа персонала, квалификация сотрудников, вежливость, скорость обслуживания, готовность помочь, скорость доставки, стоимость доставки, "
+            "аккуратность доставки, работа курьера, сроки доставки, соотношение цена-качество, цены, скидки, общая стоимость, упаковка, гарантия, "
+            "возврат, удобство сайта, функциональность сайта, скорость сайта, дизайн интерфейса, работа call-центра, онлайн-консультант, ответы на вопросы, "
+            "время ответа, общая удовлетворенность, рекомендация другим, повторная покупка, соответствие ожиданиям)"
+        )
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        data = response.json()
+
+        # Извлекаем и очищаем JSON из "response"
+        raw_json_str = data.get("response", "").strip()
+        cleaned_json = json.loads(raw_json_str)
+
+        return cleaned_json
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Ошибка запроса: {e}")
+    except json.JSONDecodeError:
+        print("❌ Не удалось распарсить JSON из поля 'response'.")
+
+    return {}
+
+def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> dict:
+    """
+    Отправляет статистику негативных аспектов в LLM и получает рекомендации.
+    Возвращает JSON-ответ (словарь).
+    """
+    url = "http://localhost:11434/api/generate"
+
+    # Формируем текст для prompt
+    # Пример: "Количество отзывов 1247, темы с количеством упоминаний в скобках: Скорость доставки (234 упоминания) ..."
+    topics_str = " ".join(
+        [f"{topic} ({count} упоминания)" for topic, count in topics_dict.items()]
+    )
+    prompt_text = f"Количество отзывов {total_reviews}, темы с количеством упоминаний в скобках: {topics_str}"
+
+    payload = {
+        "model": "mistral",
+        "prompt": prompt_text,
+        "context": [],
+        "stream": False,
+        "system": (
+            "Ты - профессиональный аналитик отзывов со стажем 10 лет. "
+            "Тебе будут отправлены следующие данные: общее количество отзывов, "
+            "негативные аспекты с количеством их упоминания в отзывах. "
+            "Тебе нужно выдать рекомендации на основе этой информации в следующем формате "
+            "(приоритет - высокий, средний, низкий, текст предложения по улучшению): "
+            "{\"feedback_analysis\":{\"prio\":\"уровень приоритета\","
+            "\"problem\":\"сам негативный аспект\","
+            "\"proposal_text\":\"текст предложения по улучшению\"}}"
+        )
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        data = response.json()
+
+        # Извлекаем JSON из поля "response"
+        raw_json_str = data.get("response", "").strip()
+        cleaned_json = json.loads(raw_json_str)
+
+        return cleaned_json
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Ошибка запроса: {e}")
+    except json.JSONDecodeError:
+        print("❌ Не удалось распарсить JSON из поля 'response'.")
+
+    return {}
