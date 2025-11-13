@@ -15,3 +15,15 @@ class RecommendationItem(BaseModel):
 class RecommendationsResponse(BaseModel):
     status: str
     recommendations: list[RecommendationItem]
+
+
+
+class FeedbackAnalysis(BaseModel):
+    prio: str
+    problem: str
+    proposal_text: str
+
+
+class FeedbackReportResponse(BaseModel):
+    feedback_analysis: FeedbackAnalysis
+    proposal_text: str

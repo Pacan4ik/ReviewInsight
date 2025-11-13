@@ -1,6 +1,8 @@
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Download, Lightbulb, BarChart3, FileText, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";  // <--- НОВОЕ
+
 
 const recommendations = [
   {
@@ -63,7 +65,50 @@ const executiveSummary = {
   timeframe: "1 января - 31 декабря 2024 г.",
 };
 
+type FeedbackAnalysis = {
+  prio: string;
+  problem: string;
+  proposal_text: string;
+};
+
+type FeedbackReportResponse = {
+  feedback_analysis: FeedbackAnalysis;
+  proposal_text: string; // строка с шагами, разделёнными ";"
+};
+
+
+
 export default function RecommendationsReports() {
+  const [feedbackReport, setFeedbackReport] = useState<FeedbackReportResponse | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFeedback = async () => {
+      try {
+        setFeedbackLoading(true);
+        setFeedbackError(null);
+
+        // Можно через env-переменную, чтобы не хардкодить бэкенд-URL
+        const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+        const resp = await fetch(`${baseUrl}/api/recommendations/feedback-report`);
+
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const data: FeedbackReportResponse = await resp.json();
+        setFeedbackReport(data);
+      } catch (e) {
+        console.error(e);
+        setFeedbackError("Не удалось загрузить рекомендации от ИИ");
+      } finally {
+        setFeedbackLoading(false);
+      }
+    };
+
+    fetchFeedback();
+  }, []);
   return (
     <Layout>
       <div className="space-y-8">
@@ -172,64 +217,33 @@ export default function RecommendationsReports() {
             Рекомендации на основе ИИ
           </h2>
 
-          <div className="space-y-4">
-            {recommendations.map((rec, idx) => (
-              <div
-                key={idx}
-                className="rounded-lg border border-primary-200 bg-white p-5 transition-all hover:shadow-md"
-              >
-                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          rec.priority === "High"
-                            ? "bg-orange-100 text-orange-700"
-                            : rec.priority === "Medium"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {rec.priority === "High"
-                          ? "Высокий приоритет"
-                          : rec.priority === "Medium"
-                            ? "Средний приоритет"
-                            : "Низкий приоритет"}
-                      </span>
-                    </div>
-                    <h3 className="mt-2 text-lg font-semibold text-primary-900">
-                      {rec.title}
-                    </h3>
-                  </div>
+          {feedbackLoading && (
+            <p className="text-primary-600">Загружаем рекомендации от ИИ…</p>
+          )}
+
+          {feedbackError && (
+            <p className="text-sm text-red-600">{feedbackError}</p>
+          )}
+
+          {!feedbackLoading && !feedbackError && feedbackReport && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-primary-200 bg-white p-5">
+                <div className="mb-2 flex items-center gap-3">
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-800">
+                    Приоритет: {feedbackReport.feedback_analysis.prio}
+                  </span>
                 </div>
 
-                <p className="mb-4 text-primary-700">{rec.description}</p>
+                <h3 className="mb-2 text-lg font-semibold text-primary-900">
+                  Проблема: {feedbackReport.feedback_analysis.problem}
+                </h3>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex gap-4 text-sm">
-                    <div className="flex items-center gap-1">
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                      <span className="font-medium text-green-600">
-                        {rec.impact}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-primary-600">
-                        Трудозатратность: <span className="font-medium">{rec.effort}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-primary-300 text-primary-600 hover:bg-primary-50"
-                  >
-                    Подробнее
-                  </Button>
-                </div>
+                <p className="text-primary-700">
+                  {feedbackReport.feedback_analysis.proposal_text}
+                </p>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Key Metrics Dashboard */}
@@ -317,41 +331,35 @@ export default function RecommendationsReports() {
           <h2 className="text-lg font-semibold text-primary-900">
             Рекомендуемые следующие шаги
           </h2>
-          <ol className="space-y-3">
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
-                1
-              </span>
-              <span className="text-primary-900">
-                Организуйте встречу с командой продукта для обсуждения рекомендаций с высоким приоритетом
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
-                2
-              </span>
-              <span className="text-primary-900">
-                Создайте план действий по улучшению доставки (инициатива с наибольшим влиянием)
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
-                3
-              </span>
-              <span className="text-primary-900">
-                Внедрите быстрые выигрыши (улучшение описания товаров)
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
-                4
-              </span>
-              <span className="text-primary-900">
-                Ежемесячно отслеживайте метрики и корректируйте стратегии
-              </span>
-            </li>
-          </ol>
+
+          {feedbackLoading && (
+            <p className="text-primary-600">Формируем план действий…</p>
+          )}
+
+          {feedbackError && (
+            <p className="text-sm text-red-600">
+              {feedbackError}
+            </p>
+          )}
+
+          {!feedbackLoading && !feedbackError && feedbackReport && (
+            <ol className="space-y-3">
+              {feedbackReport.proposal_text
+                .split(";")
+                .map((step) => step.trim())
+                .filter(Boolean)
+                .map((step, index) => (
+                  <li key={index} className="flex gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
+                      {index + 1}
+                    </span>
+                    <span className="text-primary-900">{step}</span>
+                  </li>
+                ))}
+            </ol>
+          )}
         </div>
+
       </div>
     </Layout>
   );
