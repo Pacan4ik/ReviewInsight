@@ -46,7 +46,7 @@ class Review(Base):
     review_created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
 
     __table_args__ = (
-        CheckConstraint("overall_sentiment IN ('отрицательная','нейтральная','положительная')", name="ck_reviews_overall_sentiment"),
+        CheckConstraint("overall_sentiment IN ('отрицательная','нейтральная','позитивная')", name="ck_reviews_overall_sentiment"),
     )
 
     batch = relationship("ImportBatch", back_populates="reviews")
@@ -70,7 +70,7 @@ class ReviewTheme(Base):
     # Примечание: в исходной схеме был UNIQUE (analysis_id, theme), но столбец analysis_id не определён.
     # Логично предположить, что уникальность должна быть гарантирована по (review_id, theme).
     __table_args__ = (
-        CheckConstraint("sentiment IN ('отрицательная','нейтральная','положительная')", name="ck_review_themes_sentiment"),
+        CheckConstraint("sentiment IN ('отрицательная','нейтральная','позитивная')", name="ck_review_themes_sentiment"),
         UniqueConstraint("review_id", "theme", name="uq_review_themes_review_theme"),
     )
 
