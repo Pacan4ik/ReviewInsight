@@ -2,34 +2,47 @@ import csv
 import io
 import json
 from typing import Optional
+from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import BackgroundTasks
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.db import get_db_session
+from ..models.db_models import ImportBatch, Review, ReviewTheme
 from ..models.import_models import ImportRequest
+from ..services.analysis import analyze_review
 
 router = APIRouter(prefix="/api/reviews", tags=["import"])
 
 
 @router.post("/import")
 async def import_csv(
-    file: UploadFile = File(...),
-    source: str = Form('csv'),
-    batch_id: Optional[str] = Form(None),
-    delimiter: str = Form(','),
-    encoding: str = Form('utf-8'),
-    metadata: Optional[str] = Form(None),
+        background_tasks: BackgroundTasks,
+        # file: UploadFile = File(...),
+        file = None,
+        source: str = Form('csv'),
+        batch_id: Optional[str] = Form(None),
+        delimiter: str = Form(','),
+        encoding: str = Form('utf-8'),
+        metadata: Optional[str] = Form(None),
+        db: AsyncSession = Depends(get_db_session)
 ):
+
+
     # Собираем модель метаданных из полей формы
     req = ImportRequest(
         source=source,
         batch_id=batch_id,
-        filename=file.filename,
+        filename=None,
         delimiter=delimiter,
         encoding=encoding,
         metadata=json.loads(metadata) if metadata else None,
     )
 
-    content = await file.read()  # bytes с содержимым CSV
+    local_path = Path(__file__).resolve().parent / "text.csv"
+    content =  local_path.read_bytes()  # bytes с содержимым CSV #TODO
 
     try:
         decoded = content.decode(encoding or 'utf-8')
@@ -39,17 +52,64 @@ async def import_csv(
 
     stream = io.StringIO(decoded)
     reader = csv.reader(stream, delimiter=',')
+    total_rows = sum(1 for row in reader)
+    stream.seek(0)
+    reader = csv.reader(stream, delimiter=',')
 
+    new_batch = ImportBatch(source_type=source, source_name=req.filename, meta_info=req.metadata)
+    db.add(new_batch)
+
+    await db.commit()
+    await db.refresh(new_batch)
+
+    background_tasks.add_task(process_batch_data, db, new_batch.id, decoded, delimiter)
+
+    return {"status": "ok", "imported_count": 0, "batch_id": req.batch_id or "generated"}
+
+
+async def process_batch_data(session, batch_id: int, decoded_text: str, delimiter: str = ','):
     imported_count = 0
+    stream = io.StringIO(decoded_text)
+    reader = csv.reader(stream, delimiter=delimiter)
+
     for row in reader:
         if not row:
             continue
         text = row[0].strip()
         if not text:
             continue
-        # Вызов заглушки для каждого текста
-        # TODO process_review_text(text)
-        imported_count += 1
-    # Здесь — логика парсинга CSV и создания batch в БД
 
-    return {"status": "ok", "imported_count": 0, "batch_id": req.batch_id or "generated"}
+        print(text)
+        analysis = analyze_review(text)
+        if isinstance(analysis, str):
+            try:
+                parsed = json.loads(analysis)
+            except Exception:
+                parsed = {}
+        else:
+            parsed = analysis or {}
+
+
+        print(f"Parsed analysis: {parsed}")
+        ra = parsed.get("review_analysis", {}) if isinstance(parsed, dict) else {}
+        overall = ra.get("overall_sentiment")
+        themes = ra.get("key_themes", []) or []
+
+        # сохраняем Review
+        review = Review(batch_id=batch_id, raw_text=text, overall_sentiment=overall)
+        session.add(review)
+        print("Saving review...")
+        await session.flush()  # чтобы получить review.id
+
+        # сохраняем темы
+        for t in themes:
+            theme_name = t.get("theme")
+            sentiment = t.get("sentiment")
+            theme_obj = ReviewTheme(review_id=review.id, theme=theme_name, sentiment=sentiment)
+            session.add(theme_obj)
+            print("Saving theme...")
+            await session.flush()
+        imported_count += 1
+
+    await session.commit()
+    return imported_count

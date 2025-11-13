@@ -26,7 +26,7 @@ def analyze_review(review_text: str) -> dict:
     """
     Отправляет отзыв на анализ и возвращает JSON-объект результата.
     """
-    url = "http://localhost:11434/api/generate"
+    url = "http://ollama:11434/api/generate"
 
     payload = {
         "model": "mistral",
