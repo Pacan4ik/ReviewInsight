@@ -12,25 +12,27 @@ import ImportAndReviews from "./pages/ImportAndReviews";
 import ReviewsAnalysis from "./pages/ReviewsAnalysis";
 import RecommendationsReports from "./pages/RecommendationsReports";
 
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/import" element={<ImportAndReviews />} />
+            <Route path="/analysis" element={<ReviewsAnalysis />} />
+            <Route path="/reports" element={<RecommendationsReports />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+
+      </BrowserRouter>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/import" element={<ImportAndReviews />} />
-          <Route path="/analysis" element={<ReviewsAnalysis />} />
-          <Route path="/reports" element={<RecommendationsReports />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
+
 
 createRoot(document.getElementById("root")!).render(<App />);
