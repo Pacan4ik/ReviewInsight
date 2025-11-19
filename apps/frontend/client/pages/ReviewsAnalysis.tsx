@@ -15,45 +15,226 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { TrendingUp, AlertCircle, ThumbsUp } from "lucide-react";
+import { useEffect, useState } from "react";
 
-const sentimentData = [
+const sentimentData = [];
+const sentimentTimeline = [];
+const topicsData = [];
+const commonComplaints = [];
+const positiveAspects = [];
+
+const defaultSentimentData = [
   { name: "Позитивные", value: 45, color: "#00b4d8" },
   { name: "Нейтральные", value: 30, color: "#90e0ef" },
   { name: "Негативные", value: 25, color: "#0096c7" },
 ];
 
-const sentimentTimeline = [
+const defaultSentimentTimeline = [
   { date: "Неделя 1", positive: 35, neutral: 28, negative: 37 },
   { date: "Неделя 2", positive: 38, neutral: 30, negative: 32 },
   { date: "Неделя 3", positive: 42, neutral: 28, negative: 30 },
   { date: "Неделя 4", positive: 45, neutral: 30, negative: 25 },
 ];
 
-const topicsData = [
-  { name: "Скорость доставки", count: 234, sentiment: "mixed" },
-  { name: "Качество товара", count: 198, sentiment: "positive" },
-  { name: "Обслуживание", count: 176, sentiment: "positive" },
-  { name: "Цена", count: 154, sentiment: "negative" },
-  { name: "Упаковка", count: 142, sentiment: "mixed" },
+const defaultTopicsData = [
+  { name: "Скорость доставки", count: 234, sentiment: "mixed" as const },
+  { name: "Качество товара", count: 198, sentiment: "positive" as const },
+  { name: "Обслуживание", count: 176, sentiment: "positive" as const },
+  { name: "Цена", count: 154, sentiment: "negative" as const },
+  { name: "Упаковка", count: 142, sentiment: "mixed" as const },
 ];
 
-const commonComplaints = [
+const defaultCommonComplaints = [
   "Медленная доставка",
-  "Повреждённый товар п��и доставке",
+  "Повреждённый товар при доставке",
   "Неясные описания товара",
   "Сложно связаться с поддержкой",
   "Товар отсутствует в наличии",
 ];
 
-const positiveAspects = [
+const defaultPositiveAspects = [
   "Отличное качество товара",
   "Удобный интерфейс",
   "Быстрая обработка",
-  "Хорошее соотношение цены и качества",
-  "Профессиональное обслуживание",
+  "Хорошее отношение к клиентам",
+  "Прозрачные условия доставки",
 ];
 
+type ThemeCount = {
+  topic: string;
+  count: number;
+};
+
+type DayCount = {
+  date: string; // "2025-11-13"
+  count: number;
+};
+
+type DashboardSummaryResponse = {
+  total_reviews: number;
+  sentiment_distribution: Record<string, number>; // "положительная" | "нейтральная" | "отрицательная"
+  avg_sentiment_score: number;
+  total_themes: number;
+  non_positive_themes: number;
+  top_negative_themes: ThemeCount[];
+  top_positive_themes: ThemeCount[];
+  daily_counts: Record<string, DayCount[]>; // ключи: те же 3 тональности
+};
+
+function buildSentimentData(
+  dist: Record<string, number>,
+  totalReviews: number,
+) {
+  const total =
+    totalReviews || Object.values(dist || {}).reduce((acc, v) => acc + (v || 0), 0);
+
+  const mapping = [
+    { key: "положительная", name: "Позитивные", color: "#00b4d8" },
+    { key: "нейтральная", name: "Нейтральные", color: "#90e0ef" },
+    { key: "отрицательная", name: "Негативные", color: "#0096c7" },
+  ];
+
+  return mapping.map(({ key, name, color }) => {
+    const count = dist?.[key] ?? 0;
+    const value = total ? Math.round((count / total) * 100) : 0;
+    return { name, value, color };
+  });
+}
+
+type SentimentTimelinePoint = {
+  date: string;
+  positive: number;
+  neutral: number;
+  negative: number;
+};
+
+function buildSentimentTimeline(
+  daily: DashboardSummaryResponse["daily_counts"],
+): SentimentTimelinePoint[] {
+  if (!daily) return [];
+
+  const datesSet = new Set<string>();
+
+  (daily["положительная"] ?? []).forEach((d) => datesSet.add(d.date));
+  (daily["нейтральная"] ?? []).forEach((d) => datesSet.add(d.date));
+  (daily["отрицательная"] ?? []).forEach((d) => datesSet.add(d.date));
+
+  const dates = Array.from(datesSet).sort(); // YYYY-MM-DD нормально сортируются как строки
+
+  const getCount = (sentimentKey: string, date: string) =>
+    (daily[sentimentKey] ?? []).find((item) => item.date === date)?.count ?? 0;
+
+  return dates.map((date) => ({
+    date,
+    positive: getCount("положительная", date),
+    neutral: getCount("нейтральная", date),
+    negative: getCount("отрицательная", date),
+  }));
+}
+
+
+
 export default function ReviewsAnalysis() {
+  const [dashboard, setDashboard] = useState<DashboardSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const baseUrl = "http://localhost:8000"; // или через env, если хочешь
+        const today = new Date();
+
+        const endDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
+
+        const start = new Date();
+        start.setDate(today.getDate() - 30); // последние 30 дней
+        const startDate = start.toISOString().slice(0, 10);
+
+        const productId = 1; // пока жёстко, можно потом сделать выбор товара
+
+        const url = `${baseUrl}/api/dashboard/summary?start_date=${startDate}&end_date=${endDate}&product_id=${productId}`;
+
+        const resp = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          cache: "no-store",
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          console.error("Dashboard error:", resp.status, text);
+          throw new Error(`Ошибка сервера: ${resp.status}`);
+        }
+
+        const contentType = resp.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          const text = await resp.text();
+          console.error("Ожидали JSON, получили:", text);
+          throw new Error("Сервер вернул не JSON");
+        }
+
+        const data = (await resp.json()) as DashboardSummaryResponse;
+        console.log("Dashboard summary:", data);
+        setDashboard(data);
+      } catch (e) {
+        console.error(e);
+        setError("Не удалось загрузить данные анализа");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
+
+  const sentimentData =
+    dashboard && dashboard.sentiment_distribution
+      ? buildSentimentData(
+          dashboard.sentiment_distribution,
+          dashboard.total_reviews,
+        )
+      : defaultSentimentData;
+
+  const sentimentTimeline =
+    dashboard && dashboard.daily_counts
+      ? buildSentimentTimeline(dashboard.daily_counts)
+      : defaultSentimentTimeline;
+
+  const topicsData =
+    dashboard &&
+    (dashboard.top_positive_themes.length > 0 ||
+      dashboard.top_negative_themes.length > 0)
+      ? [
+          ...dashboard.top_positive_themes.map((t) => ({
+            name: t.topic,
+            count: t.count,
+            sentiment: "positive" as const,
+          })),
+          ...dashboard.top_negative_themes.map((t) => ({
+            name: t.topic,
+            count: t.count,
+            sentiment: "negative" as const,
+          })),
+        ].sort((a, b) => b.count - a.count)
+      : defaultTopicsData;
+
+  const commonComplaints =
+    dashboard && dashboard.top_negative_themes.length
+      ? dashboard.top_negative_themes.map((t) => t.topic)
+      : defaultCommonComplaints;
+
+  const positiveAspects =
+    dashboard && dashboard.top_positive_themes.length
+      ? dashboard.top_positive_themes.map((t) => t.topic)
+      : defaultPositiveAspects;
+
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -71,26 +252,34 @@ export default function ReviewsAnalysis() {
         <div className="grid gap-4 md:grid-cols-4">
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">Всего отзывов</p>
-            <p className="text-3xl font-bold text-primary-900">1 247</p>
-            <p className="text-xs text-primary-500">+15% от прошлого месяца</p>
+            <p className="text-3xl font-bold text-primary-900">
+              {dashboard ? dashboard.total_reviews : "1 247"}
+            </p>
           </div>
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">Средняя тональность</p>
-            <p className="text-3xl font-bold text-primary-900">4.2/5.0</p>
-            <p className="text-xs text-green-600">↑ Улучшается</p>
+            <p className="text-3xl font-bold text-primary-900">
+              {dashboard ? dashboard.avg_sentiment_score.toFixed(2) : "4.20"}
+            </p>
           </div>
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">
               Ключевые темы
             </p>
-            <p className="text-3xl font-bold text-primary-900">12</p>
+            <p className="text-3xl font-bold text-primary-900">
+              {dashboard ? dashboard.total_themes : "12"}
+            </p>
+
             <p className="text-xs text-primary-500">Категорий определено</p>
           </div>
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">
               Критические проблемы
             </p>
-            <p className="text-3xl font-bold text-orange-600">8</p>
+            <p className="text-3xl font-bold text-orange-600">
+              {dashboard ? dashboard.non_positive_themes : "8"}
+            </p>
+
             <p className="text-xs text-orange-600">Требуют внимания</p>
           </div>
         </div>
@@ -236,7 +425,7 @@ export default function ReviewsAnalysis() {
             <div className="mb-4 flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-orange-600" />
               <h2 className="text-lg font-semibold text-primary-900">
-                Основные ��алобы
+                Основные жалобы
               </h2>
             </div>
             <div className="space-y-3">
