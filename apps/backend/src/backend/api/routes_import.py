@@ -27,6 +27,10 @@ async def import_csv(
         delimiter: str = Form(','),
         encoding: str = Form('utf-8'),
         metadata: Optional[str] = Form(None),
+        delete_dublicates: bool = Form(False),
+        delete_spam: bool = Form(False),
+        normalize_text: bool = Form(False),
+        language: Optional[str] = Form(None),
         db: AsyncSession = Depends(get_db_session)
 ):
 
@@ -121,3 +125,15 @@ async def process_batch_data(batch_id: int, decoded_text: str, delimiter: str = 
             await agen.close()
         except Exception:
             pass
+
+
+@router.get("/last_imports")
+async def get_last_imports(
+        limit: int = 10,
+        db: AsyncSession = Depends(get_db_session)
+):
+    result = await db.execute(
+        ImportBatch.__table__.select().order_by(ImportBatch.created_at.desc()).limit(limit)
+    )
+    batches = result.fetchall()
+    return {"batches": [dict(batch) for batch in batches]}
