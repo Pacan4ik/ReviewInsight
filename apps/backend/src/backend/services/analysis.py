@@ -3,6 +3,7 @@ from typing import List, Dict
 import random
 import requests
 import json
+from ..config import get_settings
 
 
 def fake_sentiment() -> str:
@@ -31,10 +32,10 @@ def _analyze_review_sync(review_text: str) -> dict:
     """
     Отправляет отзыв на анализ и возвращает JSON-объект результата.
     """
-    url = "http://ollama:11434/api/generate"
-
+    url = get_settings().llm_api_url
+    model = get_settings().llm_model_name
     payload = {
-        "model": "qwen2.5:7b-instruct",
+        "model": model,
         "prompt": review_text,
         "context": [],
         "stream": False,
@@ -86,8 +87,8 @@ def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dic
     Отправляет статистику негативных аспектов в LLM и получает рекомендации.
     Возвращает JSON-ответ (словарь).
     """
-    url = "http://ollama:11434/api/generate"
-
+    url = get_settings().llm_api_url
+    model = get_settings().llm_model_name
     # Формируем текст для prompt
     # Пример: "Количество отзывов 1247, темы с количеством упоминаний в скобках: Скорость доставки (234 упоминания) ..."
     topics_str = " ".join(
@@ -98,7 +99,7 @@ def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dic
     print(prompt_text)
 
     payload = {
-        "model": "qwen2.5:7b-instruct",
+        "model": model,
         "prompt": prompt_text,
         "stream": False,
         "format": "json",
