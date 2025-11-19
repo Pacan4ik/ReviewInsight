@@ -77,7 +77,7 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
     Отправляет статистику негативных аспектов в LLM и получает рекомендации.
     Возвращает JSON-ответ (словарь).
     """
-    url = "http://localhost:11434/api/generate"
+    url = "http://ollama:11434/api/generate"
 
     # Формируем текст для prompt
     # Пример: "Количество отзывов 1247, темы с количеством упоминаний в скобках: Скорость доставки (234 упоминания) ..."
