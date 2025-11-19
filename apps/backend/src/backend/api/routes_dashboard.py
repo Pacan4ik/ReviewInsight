@@ -4,6 +4,7 @@ from typing import List, Dict
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from ..services.dashboard_metrics import ThemeCount, DayCount
 
 from ..core.db import get_db_session
 from ..services.dashboard_metrics import (
@@ -17,16 +18,6 @@ from ..services.dashboard_metrics import (
 )
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
-
-
-class ThemeCount(BaseModel):
-    topic: str
-    count: int
-
-
-class DayCount(BaseModel):
-    date: str
-    count: int
 
 
 class DashboardSummaryResponse(BaseModel):
