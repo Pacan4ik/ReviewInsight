@@ -88,7 +88,7 @@ async def get_total_themes(db: AsyncSession, start_ts: datetime, end_excl: datet
     return int(res_total_themes.scalar() or 0)
 
 
-async def get_non_positive_themes(db: AsyncSession, start_ts: datetime, end_excl: datetime) -> int:
+async def get_non_positive_themes(db: AsyncSession, start_ts: datetime, end_excl: datetime) -> int: #TODO LIMIT?
     res_non_pos_themes = await db.execute(
         text(
             """
