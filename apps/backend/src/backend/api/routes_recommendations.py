@@ -3,7 +3,7 @@ from ..models.recommendations_models import (
     RecommendationsRequest,
     RecommendationsResponse,
     RecommendationItem,
-    FeedbackReportResponse,      # <--- НОВОЕ
+    FeedbackReportResponse,
 )
 from ..services.recommendations import generate_recommendations_stub
 from ..services.storage import storage
