@@ -2,8 +2,10 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { BarChart3, FileText, Upload } from "lucide-react";
 
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+
 
   const navigationItems = [
     {
@@ -63,6 +65,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+
+
           </nav>
         </div>
       </header>
@@ -73,6 +77,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
 
       {/* Footer */}
       <footer className="border-t border-primary-100/50 bg-white/50 backdrop-blur-sm">
