@@ -82,7 +82,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="border-t border-primary-100/50 bg-white/50 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-6 text-center text-sm text-primary-600 sm:px-8">
-          <p>Review Insight © 2024 • Аналитика отзывов с помощью ИИ</p>
+          <p>Review Insight © 2025 • Аналитика отзывов с помощью ИИ</p>
         </div>
       </footer>
     </div>

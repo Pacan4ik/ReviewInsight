@@ -11,6 +11,8 @@ services:
       - ALLOWED_ORIGINS=http://localhost:8080
       - LOG_LEVEL=info
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/reviewinsight
+      - MODEL_NAME=qwen2.5:7b-instruct
+      - LLM_API_URL=http://ollama:11434/api/generate
     depends_on:
       - db
     volumes:

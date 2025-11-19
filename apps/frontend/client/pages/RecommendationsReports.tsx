@@ -30,7 +30,7 @@ type FeedbackAnalysis = {
 
 type FeedbackReportResponse = {
   feedback_analysis: FeedbackAnalysis[]; // ✅ массив
-  proposal_text: string;
+  overall_proposals: [];
 };
 
 export default function RecommendationsReports() {
@@ -378,22 +378,22 @@ export default function RecommendationsReports() {
             </p>
           )}
 
-          {!feedbackLoading && !feedbackError && feedbackReport && (
-            <ol className="space-y-3">
-              {feedbackReport.proposal_text
-                .split(";")
-                .map((step) => step.trim())
-                .filter(Boolean)
-                .map((step, index) => (
-                  <li key={index} className="flex gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
-                      {index + 1}
-                    </span>
-                    <span className="text-primary-900">{step}</span>
-                  </li>
-                ))}
-            </ol>
-          )}
+         {!feedbackLoading && !feedbackError && feedbackReport && (
+                        <ol className="space-y-3">
+                          {Array.isArray(feedbackReport.overall_proposals) && feedbackReport.overall_proposals.length > 0 ? (
+                            feedbackReport.overall_proposals.map((step: string, index: number) => (
+                              <li key={index} className="flex gap-3">
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
+                                  {index + 1}
+                                </span>
+                                <span className="text-primary-900">{step}</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-primary-600">Нет предложений</li>
+                          )}
+                        </ol>
+                      )}
         </div>
 
       </div>

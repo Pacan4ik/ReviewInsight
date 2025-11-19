@@ -57,14 +57,14 @@ async def feedback_report(
         # Возвращаем пустую структуру, соответствующую схеме
         return {
             "feedback_analysis": [],
-            "proposal_text": "",
+            "overall_proposals": [],
         }
 
     top_negative = await get_top_themes(db, start_dt, end_dt, sentiment="отрицательная")
 
     topics_dict = {tc.topic: tc.count for tc in top_negative}
 
-    data: dict[str, Any] = await asyncio.to_thread(generate_feedback_recommendations, total_reviews, topics_dict)
+    data: dict[str, Any] = await generate_feedback_recommendations(total_reviews, topics_dict)
 
     # Приводим feedback_analysis к списку
     fa = data.get("feedback_analysis")
@@ -77,8 +77,8 @@ async def feedback_report(
         data["feedback_analysis"] = []
 
     # Гарантируем поле proposal_text
-    if "proposal_text" not in data:
-        data["proposal_text"] = ""
+    if "overall_proposals" not in data:
+        data["overall_proposals"] = ""
 
     await set_analysis_state(db, is_analyzed=True, result_text=json.dumps(data, ensure_ascii=False))
 

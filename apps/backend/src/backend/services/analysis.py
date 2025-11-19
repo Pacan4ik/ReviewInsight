@@ -1,14 +1,19 @@
+import asyncio
 from typing import List, Dict
 import random
 import requests
 import json
+from ..config import get_settings
+
 
 def fake_sentiment() -> str:
     return random.choice(["positive", "neutral", "negative"])
 
+
 def fake_topics() -> List[str]:
     corpus = [["качество", "доставка"], ["цена", "поддержка"], ["скорость"], ["интерфейс", "ошибки"]]
     return random.choice(corpus)
+
 
 def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
     result = []
@@ -22,14 +27,15 @@ def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
         )
     return result
 
-def analyze_review(review_text: str) -> dict:
+
+def _analyze_review_sync(review_text: str) -> dict:
     """
     Отправляет отзыв на анализ и возвращает JSON-объект результата.
     """
-    url = "http://ollama:11434/api/generate"
-
+    url = get_settings().llm_api_url
+    model = get_settings().llm_model_name
     payload = {
-        "model": "qwen2.5:7b-instruct",
+        "model": model,
         "prompt": review_text,
         "context": [],
         "stream": False,
@@ -75,13 +81,14 @@ def analyze_review(review_text: str) -> dict:
 
     return {}
 
-def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> dict:
+
+def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dict) -> dict:
     """
     Отправляет статистику негативных аспектов в LLM и получает рекомендации.
     Возвращает JSON-ответ (словарь).
     """
-    url = "http://ollama:11434/api/generate"
-
+    url = get_settings().llm_api_url
+    model = get_settings().llm_model_name
     # Формируем текст для prompt
     # Пример: "Количество отзывов 1247, темы с количеством упоминаний в скобках: Скорость доставки (234 упоминания) ..."
     topics_str = " ".join(
@@ -92,30 +99,48 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
     print(prompt_text)
 
     payload = {
-        "model": "qwen2.5:7b-instruct",
+        "model": model,
         "prompt": prompt_text,
-        "context": [],
         "stream": False,
         "format": "json",
         "system": (
-            "Ты - профессиональный аналитик отзывов со стажем 10 лет. "
-            "Тебе будут отправлены следующие данные: общее количество отзывов, "
-            "негативные аспекты с количеством их упоминания в отзывах. "
-            "Тебе нужно выдать рекомендации на русском языке на основе этой информации в следующем формате"
-            "(приоритет - высокий, средний, низкий, текст предложения по улучшению, предложить шаги по улучшению через точку с запятой), разбирать нужно ВСЕ темы, названия полей строго по шаблону: "
-            "Отвечай только корректным JSON. Без текста до или после. Без комментариев. Пример ответа: "
-            "{"
-            "\"feedback_analysis\":{"
-            "\"prio\":\"уровень приоритета\","
-            "\"problem\":\"самый негативный аспект\","
-            "\"proposal_text\":\"текст предложения по улучшению\""
-            "},"
-            "\"proposal_text\":\"текст предложений по улучшению через точку с запятой (без номеров пунктов, н-р, сделайте это; сделайте то;\""
-            "}"
-        )
+            "Ты - ИИ-аналитик в системе автоматизированной обработки отзывов. "
+            "Ты - ФИНАЛЬНОЕ звено в автоматизированной цепочке анализа. Твои выводы сразу идут руководству на исполнение."
+            "Твоя задача - проанализировать данные и вернуть ОТВЕТ ТОЛЬКО В ФОРМАТЕ JSON.\n\n"
+
+            "СТРУКТУРА ОТВЕТА:\n"
+            "{\n"
+            "  \"feedback_analysis\": [\n"
+            "    {\n"
+            "      \"prio\": \"высокий/средний/низкий\",\n"
+            "      \"problem\": \"название проблемы\",\n"
+            "      \"proposal_text\": \"конкретное предложение по улучшению\"\n"
+            "    }\n"
+            "  ],\n"
+            "  \"overall_proposals\": [\n"
+            "    \"инсайт 1\",\n"
+            "    \"инсайт 2\"\n"
+            "  ]\n"
+            "}\n\n"
+
+            "ПРАВИЛА:\n"
+            "1. ВСЕГДА включай оба поля: feedback_analysis И overall_proposals\n"
+            "2. overall_proposals должен содержать 3-5 стратегических предложений\n"
+            "3. Используй только русский язык\n"
+            "4. Никакого текста до или после JSON\n"
+            "5. Определяй приоритет (prio) на основе частоты упоминаний и серьезности проблемы\n"
+            "6. Формулируй предложения (proposal_text) конкретно и применимо к выявленным проблемам\n"
+            "7. НИКОГДА не предлагай проводить анализ отзывов - ты уже получил все необходимые данные\n"
+        ),
+        "options": {
+            "temperature": 0.7,
+            "num_predict": 1200,
+            "top_p": 0.8,
+            "stop": ["```", "###", "System:", "\n\n"],
+            "repeat_penalty": 1.1
+        }
     }
-    #TODO change name of second proposal_text. E.g. overall_proposal_text (related to all topics)
-    #TODO give several examples for problems
+    # FIXME still bad insights sometimes
     headers = {"Content-Type": "application/json"}
 
     print(payload)
@@ -139,3 +164,22 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
         print("❌ Не удалось распарсить JSON из поля 'response'.")
 
     return {}
+
+
+async def analyze_review(review_text: str) -> dict:
+    """
+    Асинхронная обёртка над синхронным LLM-вызовом.
+    Сама функция не блокирует event loop.
+    """
+    return await asyncio.to_thread(_analyze_review_sync, review_text)
+
+
+async def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> dict:
+    """
+    Асинхронная обёртка над синхронным LLM-вызовом.
+    """
+    return await asyncio.to_thread(
+        _generate_feedback_recommendations_sync,
+        total_reviews,
+        topics_dict,
+    )

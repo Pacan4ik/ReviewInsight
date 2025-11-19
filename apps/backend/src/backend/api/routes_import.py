@@ -91,7 +91,7 @@ async def process_batch_data(batch_id: int, decoded_text: str, delimiter: str = 
                 continue
 
             print(text)
-            analysis = analyze_review(text)
+            analysis = await analyze_review(text)
             if isinstance(analysis, str):
                 try:
                     parsed = json.loads(analysis)
