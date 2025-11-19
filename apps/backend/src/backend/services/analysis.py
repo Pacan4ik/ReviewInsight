@@ -4,12 +4,15 @@ import random
 import requests
 import json
 
+
 def fake_sentiment() -> str:
     return random.choice(["positive", "neutral", "negative"])
+
 
 def fake_topics() -> List[str]:
     corpus = [["качество", "доставка"], ["цена", "поддержка"], ["скорость"], ["интерфейс", "ошибки"]]
     return random.choice(corpus)
+
 
 def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
     result = []
@@ -23,6 +26,7 @@ def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
         )
     return result
 
+
 def _analyze_review_sync(review_text: str) -> dict:
     """
     Отправляет отзыв на анализ и возвращает JSON-объект результата.
@@ -30,7 +34,7 @@ def _analyze_review_sync(review_text: str) -> dict:
     url = "http://ollama:11434/api/generate"
 
     payload = {
-        "model": "deepseek-r1:8b",
+        "model": "qwen2.5:7b-instruct",
         "prompt": review_text,
         "context": [],
         "stream": False,
@@ -76,6 +80,7 @@ def _analyze_review_sync(review_text: str) -> dict:
 
     return {}
 
+
 def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dict) -> dict:
     """
     Отправляет статистику негативных аспектов в LLM и получает рекомендации.
@@ -93,36 +98,48 @@ def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dic
     print(prompt_text)
 
     payload = {
-        "model": "deepseek-r1:8b",
+        "model": "qwen2.5:7b-instruct",
         "prompt": prompt_text,
-        "context": [],
         "stream": False,
         "format": "json",
         "system": (
-            "Ты - профессиональный аналитик отзывов со стажем 10 лет. "
-            "Тебе будут отправлены следующие данные: общее количество отзывов, "
-            "негативные аспекты с количеством их упоминания в отзывах. "
-            "Тебе нужно выдать рекомендации на русском языке на основе этой информации в следующем формате"
-            "(приоритет - высокий, средний, низкий, текст предложения по улучшению, предложить шаги по улучшению через точку с запятой), разбирать нужно ВСЕ темы, названия полей строго по шаблону: "
-            "Отвечай только корректным JSON. Без текста до или после. Без комментариев. Далее будет пример ответа. Проблем может быть НЕСКОЛЬКО, ни одна, не двае, будь внимательнее. Пример ответа: "
-            "{"
-              "\"feedback_analysis\": ["
-                "{"
-                  "\"prio\": \"уровень приоритета 1\","
-                  "\"problem\": \"самый негативный аспект 1\","
-                  "\"proposal_text\": \"текст предложения по улучшению 1\""
-                "},"
-                "{"
-                  "\"prio\": \"уровень приоритета 2\","
-                  "\"problem\": \"самый негативный аспект 2\","
-                  "\"proposal_text\": \"текст предложения по улучшению 2\""
-                "}"
-              "],"
-              "\"proposal_text\": \"текст предложений по улучшению через точку с запятой (без номеров пунктов, н-р, сделайте это; сделайте то;\""
-            "}"
-        )
+            "Ты - ИИ-аналитик в системе автоматизированной обработки отзывов. "
+            "Ты - ФИНАЛЬНОЕ звено в автоматизированной цепочке анализа. Твои выводы сразу идут руководству на исполнение."
+            "Твоя задача - проанализировать данные и вернуть ОТВЕТ ТОЛЬКО В ФОРМАТЕ JSON.\n\n"
+
+            "СТРУКТУРА ОТВЕТА:\n"
+            "{\n"
+            "  \"feedback_analysis\": [\n"
+            "    {\n"
+            "      \"prio\": \"высокий/средний/низкий\",\n"
+            "      \"problem\": \"название проблемы\",\n"
+            "      \"proposal_text\": \"конкретное предложение по улучшению\"\n"
+            "    }\n"
+            "  ],\n"
+            "  \"overall_proposals\": [\n"
+            "    \"инсайт 1\",\n"
+            "    \"инсайт 2\"\n"
+            "  ]\n"
+            "}\n\n"
+
+            "ПРАВИЛА:\n"
+            "1. ВСЕГДА включай оба поля: feedback_analysis И overall_proposals\n"
+            "2. overall_proposals должен содержать 3-5 стратегических предложений\n"
+            "3. Используй только русский язык\n"
+            "4. Никакого текста до или после JSON\n"
+            "5. Определяй приоритет (prio) на основе частоты упоминаний и серьезности проблемы\n"
+            "6. Формулируй предложения (proposal_text) конкретно и применимо к выявленным проблемам\n"
+            "7. НИКОГДА не предлагай проводить анализ отзывов - ты уже получил все необходимые данные\n"
+        ),
+        "options": {
+            "temperature": 0.7,
+            "num_predict": 1200,
+            "top_p": 0.8,
+            "stop": ["```", "###", "System:", "\n\n"],
+            "repeat_penalty": 1.1
+        }
     }
-    #TODO change name of second proposal_text. E.g. overall_proposal_text (related to all topics)
+    # FIXME still bad insights sometimes
     headers = {"Content-Type": "application/json"}
 
     print(payload)

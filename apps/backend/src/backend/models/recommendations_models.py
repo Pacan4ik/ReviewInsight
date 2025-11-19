@@ -26,4 +26,4 @@ class FeedbackAnalysis(BaseModel):
 
 class FeedbackReportResponse(BaseModel):
     feedback_analysis: list[FeedbackAnalysis]   # ✅ теперь это список
-    proposal_text: str
+    overall_proposals: list[str]  # ✅ список общих предложений
