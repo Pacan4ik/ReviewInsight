@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,6 +23,18 @@ def get_session() -> sessionmaker:
     if _SessionLocal is None:
         raise RuntimeError("Engine is not initialized. Call get_engine(database_url) first.")
     return _SessionLocal
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    session_maker = get_session()
+    async with session_maker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 async def init_db(engine: AsyncEngine) -> None:
