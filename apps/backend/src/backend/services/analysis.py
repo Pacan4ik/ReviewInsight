@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Dict
 import random
 import requests
@@ -22,7 +23,7 @@ def analyze_reviews_stub(review_ids: List[int]) -> List[Dict]:
         )
     return result
 
-def analyze_review(review_text: str) -> dict:
+def _analyze_review_sync(review_text: str) -> dict:
     """
     Отправляет отзыв на анализ и возвращает JSON-объект результата.
     """
@@ -75,7 +76,7 @@ def analyze_review(review_text: str) -> dict:
 
     return {}
 
-def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> dict:
+def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dict) -> dict:
     """
     Отправляет статистику негативных аспектов в LLM и получает рекомендации.
     Возвращает JSON-ответ (словарь).
@@ -106,9 +107,9 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
             "Отвечай только корректным JSON. Без текста до или после. Без комментариев. Пример ответа: "
             "{"
             "\"feedback_analysis\":{"
-            "\"prio\":\"уровень приоритета\","
-            "\"problem\":\"самый негативный аспект\","
-            "\"proposal_text\":\"текст предложения по улучшению\""
+                "\"prio\":\"уровень приоритета\","
+                "\"problem\":\"самый негативный аспект\","
+                "\"proposal_text\":\"текст предложения по улучшению\""
             "},"
             "\"proposal_text\":\"текст предложений по улучшению через точку с запятой (без номеров пунктов, н-р, сделайте это; сделайте то;\""
             "}"
@@ -139,3 +140,22 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
         print("❌ Не удалось распарсить JSON из поля 'response'.")
 
     return {}
+
+
+async def analyze_review(review_text: str) -> dict:
+    """
+    Асинхронная обёртка над синхронным LLM-вызовом.
+    Сама функция не блокирует event loop.
+    """
+    return await asyncio.to_thread(_analyze_review_sync, review_text)
+
+
+async def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> dict:
+    """
+    Асинхронная обёртка над синхронным LLM-вызовом.
+    """
+    return await asyncio.to_thread(
+        _generate_feedback_recommendations_sync,
+        total_reviews,
+        topics_dict,
+    )

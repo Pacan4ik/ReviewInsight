@@ -64,7 +64,7 @@ async def feedback_report(
 
     topics_dict = {tc.topic: tc.count for tc in top_negative}
 
-    data: dict[str, Any] = await asyncio.to_thread(generate_feedback_recommendations, total_reviews, topics_dict)
+    data: dict[str, Any] = await generate_feedback_recommendations(total_reviews, topics_dict)
 
     # Приводим feedback_analysis к списку
     fa = data.get("feedback_analysis")
