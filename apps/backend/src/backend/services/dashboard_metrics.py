@@ -3,9 +3,16 @@ from typing import List, Dict
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
-from ..api.routes_dashboard import ThemeCount, DayCount
+class ThemeCount(BaseModel):
+    topic: str
+    count: int
 
+
+class DayCount(BaseModel):
+    date: str
+    count: int
 
 async def get_total_reviews(db: AsyncSession, start_ts: datetime, end_excl: datetime) -> int:
     res_total = await db.execute(
