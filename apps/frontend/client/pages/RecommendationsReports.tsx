@@ -72,9 +72,10 @@ type FeedbackAnalysis = {
 };
 
 type FeedbackReportResponse = {
-  feedback_analysis: FeedbackAnalysis;
-  proposal_text: string; // строка с шагами, разделёнными ";"
+  feedback_analysis: FeedbackAnalysis[]; // ✅ массив
+  proposal_text: string;
 };
+
 
 
 
@@ -90,8 +91,15 @@ export default function RecommendationsReports() {
         setFeedbackError(null);
 
         // Можно через env-переменную, чтобы не хардкодить бэкенд-URL
-        const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
-        const resp = await fetch(`${baseUrl}/api/recommendations/feedback-report`);
+        const baseUrl = "http://localhost:8000";
+
+        const resp = await fetch(`${baseUrl}/api/recommendations/feedback-report`, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+          },
+          cache: "no-store",      // <--- ВАЖНО: отключаем кеш
+        });
 
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}`);
@@ -227,24 +235,30 @@ export default function RecommendationsReports() {
 
           {!feedbackLoading && !feedbackError && feedbackReport && (
             <div className="space-y-4">
-              <div className="rounded-lg border border-primary-200 bg-white p-5">
-                <div className="mb-2 flex items-center gap-3">
-                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-800">
-                    Приоритет: {feedbackReport.feedback_analysis.prio}
-                  </span>
+              {feedbackReport.feedback_analysis.map((analysis, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-lg border border-primary-200 bg-white p-5"
+                >
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-800">
+                      Приоритет: {analysis.prio}
+                    </span>
+                  </div>
+
+                  <h3 className="mb-2 text-lg font-semibold text-primary-900">
+                    Проблема: {analysis.problem}
+                  </h3>
+
+                  <p className="text-primary-700">
+                    {analysis.proposal_text}
+                  </p>
                 </div>
-
-                <h3 className="mb-2 text-lg font-semibold text-primary-900">
-                  Проблема: {feedbackReport.feedback_analysis.problem}
-                </h3>
-
-                <p className="text-primary-700">
-                  {feedbackReport.feedback_analysis.proposal_text}
-                </p>
-              </div>
+              ))}
             </div>
           )}
         </div>
+
 
         {/* Key Metrics Dashboard */}
         <div className="card-elevated space-y-6 p-6">
