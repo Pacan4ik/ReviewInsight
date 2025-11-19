@@ -29,17 +29,18 @@ def analyze_review(review_text: str) -> dict:
     url = "http://ollama:11434/api/generate"
 
     payload = {
-        "model": "deepseek-r1:8b",
+        "model": "qwen2.5:7b-instruct",
         "prompt": review_text,
         "context": [],
         "stream": False,
+        "format": "json",
         "system": (
             "Ты - профессиональный аналитик отзывов со стажем 10 лет. "
             "Тебе будет отправлен текст отзыва. Вот твои задачи: "
             "- выделить ключевые темы отзыва "
             "- определить тональность отзыва (нейтральная, положительная, отрицательная) "
             "- для каждой темы отзыва определить тональность темы (нейтральная, положительная, отрицательная). "
-            "Ответ нужно выдавать в виде json файла. "
+            "Отвечай только корректным JSON. Без текста до или после. Без комментариев."
             "Вот пример ответа для отзыва: \"Доставка была быстрой, но качество товара оставляет желать лучшего. Упаковка хорошая.\" "
             "{\"review_analysis\":{\"overall_sentiment\":\"нейтральная\",\"key_themes\":[{\"theme\":\"доставка\",\"sentiment\":\"положительная\"},{\"theme\":\"качество товара\",\"sentiment\":\"отрицательная\"},{\"theme\":\"упаковка\",\"sentiment\":\"положительная\"}]}} "
             "При выборе тем используй ТОЛЬКО следующие формулировки. "
@@ -58,6 +59,8 @@ def analyze_review(review_text: str) -> dict:
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         data = response.json()
+
+        print(data)
 
         # Извлекаем и очищаем JSON из "response"
         raw_json_str = data.get("response", "").strip()

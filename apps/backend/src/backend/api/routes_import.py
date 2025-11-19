@@ -20,8 +20,7 @@ router = APIRouter(prefix="/api/reviews", tags=["import"])
 @router.post("/import")
 async def import_csv(
         background_tasks: BackgroundTasks,
-        # file: UploadFile = File(...),
-        file = None,
+        file: UploadFile = File(...),
         source: str = Form('csv'),
         batch_id: Optional[str] = Form(None),
         delimiter: str = Form(','),
@@ -45,13 +44,15 @@ async def import_csv(
         metadata=json.loads(metadata) if metadata else None,
     )
 
-    local_path = Path(__file__).resolve().parent / "text.csv"
-    content =  local_path.read_bytes()  # bytes с содержимым CSV #TODO
+    try:
+        content = await file.read()
+    except Exception:
+        file.file.seek(0)
+        content = file.file.read()
 
     try:
         decoded = content.decode(encoding or 'utf-8')
     except Exception:
-        # fallback
         decoded = content.decode('utf-8', errors='replace')
 
     stream = io.StringIO(decoded)
