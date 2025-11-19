@@ -62,54 +62,62 @@ async def import_csv(
     await db.commit()
     await db.refresh(new_batch)
 
-    background_tasks.add_task(process_batch_data, db, new_batch.id, decoded, delimiter)
+    background_tasks.add_task(process_batch_data, new_batch.id, decoded, delimiter)
 
-    return {"status": "ok", "imported_count": 0, "batch_id": req.batch_id or "generated"}
-
-
-async def process_batch_data(session, batch_id: int, decoded_text: str, delimiter: str = ','):
-    imported_count = 0
-    stream = io.StringIO(decoded_text)
-    reader = csv.reader(stream, delimiter=delimiter)
-
-    for row in reader:
-        if not row:
-            continue
-        text = row[0].strip()
-        if not text:
-            continue
-
-        print(text)
-        analysis = analyze_review(text)
-        if isinstance(analysis, str):
-            try:
-                parsed = json.loads(analysis)
-            except Exception:
-                parsed = {}
-        else:
-            parsed = analysis or {}
+    return {"status": "ok", "imported_count": total_rows, "batch_id": new_batch.id or "generated"}
 
 
-        print(f"Parsed analysis: {parsed}")
-        ra = parsed.get("review_analysis", {}) if isinstance(parsed, dict) else {}
-        overall = ra.get("overall_sentiment")
-        themes = ra.get("key_themes", []) or []
+async def process_batch_data(batch_id: int, decoded_text: str, delimiter: str = ','):
+    agen = get_db_session()
+    session = await agen.__anext__()
+    try:
+        imported_count = 0
+        stream = io.StringIO(decoded_text)
+        reader = csv.reader(stream, delimiter=delimiter)
 
-        # сохраняем Review
-        review = Review(batch_id=batch_id, raw_text=text, overall_sentiment=overall)
-        session.add(review)
-        print("Saving review...")
-        await session.flush()  # чтобы получить review.id
+        for row in reader:
+            if not row:
+                continue
+            text = row[0].strip()
+            if not text:
+                continue
 
-        # сохраняем темы
-        for t in themes:
-            theme_name = t.get("theme")
-            sentiment = t.get("sentiment")
-            theme_obj = ReviewTheme(review_id=review.id, theme=theme_name, sentiment=sentiment)
-            session.add(theme_obj)
-            print("Saving theme...")
-            await session.flush()
-        imported_count += 1
+            print(text)
+            analysis = analyze_review(text)
+            if isinstance(analysis, str):
+                try:
+                    parsed = json.loads(analysis)
+                except Exception:
+                    parsed = {}
+            else:
+                parsed = analysis or {}
 
-    await session.commit()
-    return imported_count
+
+            print(f"Parsed analysis: {parsed}")
+            ra = parsed.get("review_analysis", {}) if isinstance(parsed, dict) else {}
+            overall = ra.get("overall_sentiment")
+            themes = ra.get("key_themes", []) or []
+
+            # сохраняем Review
+            review = Review(batch_id=batch_id, raw_text=text, overall_sentiment=overall)
+            session.add(review)
+            print("Saving review...")
+            await session.flush()  # чтобы получить review.id
+
+            # сохраняем темы
+            for t in themes:
+                theme_name = t.get("theme")
+                sentiment = t.get("sentiment")
+                theme_obj = ReviewTheme(review_id=review.id, theme=theme_name, sentiment=sentiment)
+                session.add(theme_obj)
+                print("Saving theme...")
+                await session.flush()
+            imported_count += 1
+
+        await session.commit()
+        return imported_count
+    finally:
+        try :
+            await agen.close()
+        except Exception:
+            pass
