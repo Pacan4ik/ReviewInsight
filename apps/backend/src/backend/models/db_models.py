@@ -11,6 +11,8 @@ from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
     text,
+    Integer,
+    Boolean,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship
@@ -82,5 +84,24 @@ Index("idx_review_themes_theme", ReviewTheme.theme)
 Index("idx_review_themes_sentiment", ReviewTheme.sentiment)
 
 
-__all__ = ["Base", "ImportBatch", "Review", "ReviewTheme"]
+# Новая таблица для глобального состояния анализа (singleton)
+class AnalysisState(Base):
+    """
+    Таблица-одиночка для хранения флага того, был ли уже произведён глобальный анализ,
+    и текстового результата последнего анализа.
 
+    В таблице допускается только одна запись — с id = 1. Это принудительно задаётся
+    CHECK-констрейнтом (id = 1). Приложение должно обновлять/вставлять именно эту запись.
+    """
+    __tablename__ = "analysis_state"
+
+    id = Column(Integer, primary_key=True, server_default=text("1"))
+    is_analyzed = Column(Boolean, nullable=False, server_default=text("false"))
+    result_text = Column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_analysis_state_single_row"),
+    )
+
+
+__all__ = ["Base", "ImportBatch", "Review", "ReviewTheme", "AnalysisState"]

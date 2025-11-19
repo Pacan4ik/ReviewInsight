@@ -13,6 +13,7 @@ from ..core.db import get_db_session
 from ..models.db_models import ImportBatch, Review, ReviewTheme
 from ..models.import_models import ImportRequest
 from ..services.analysis import analyze_review
+from ..services.analysis_state import set_analysis_state, set_is_analyzing
 
 router = APIRouter(prefix="/api/reviews", tags=["import"])
 
@@ -55,6 +56,7 @@ async def import_csv(
     except Exception:
         decoded = content.decode('utf-8', errors='replace')
 
+    set_is_analyzing(True)
     stream = io.StringIO(decoded)
     reader = csv.reader(stream, delimiter=',')
     total_rows = sum(1 for row in reader)
@@ -67,6 +69,7 @@ async def import_csv(
     await db.commit()
     await db.refresh(new_batch)
 
+    await set_analysis_state(db, is_analyzed=False, result_text=None)
     background_tasks.add_task(process_batch_data, new_batch.id, decoded, delimiter)
 
     return {"status": "ok", "imported_count": total_rows, "batch_id": new_batch.id or "generated"}
@@ -122,6 +125,7 @@ async def process_batch_data(batch_id: int, decoded_text: str, delimiter: str = 
         await session.commit()
         return imported_count
     finally:
+        set_is_analyzing(False)
         try :
             await agen.close()
         except Exception:

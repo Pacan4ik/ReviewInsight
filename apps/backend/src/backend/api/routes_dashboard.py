@@ -4,6 +4,8 @@ from typing import List, Dict
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..services.analysis_state import get_is_analyzing
 from ..services.dashboard_metrics import ThemeCount, DayCount
 
 from ..core.db import get_db_session
@@ -38,6 +40,9 @@ async def dashboard_summary(
     product_id: int = Query(...),
     db: AsyncSession = Depends(get_db_session),
 ):
+    # Проверка, не выполняется ли в данный момент анализ
+    if get_is_analyzing():
+        raise HTTPException(status_code=409, detail="Data analysis is in progress. Please try again later.")
     # Валидация дат
     try:
         sd = datetime.strptime(start_date, "%Y-%m-%d")
@@ -69,3 +74,8 @@ async def dashboard_summary(
         top_positive_themes=top_positive_themes,
         daily_counts=daily_counts,
     )
+
+@router.get("/is-analyzing")
+async def is_analyzing_endpoint():
+    from ..services.analysis_state import get_is_analyzing
+    return {"is_analyzing": get_is_analyzing()}

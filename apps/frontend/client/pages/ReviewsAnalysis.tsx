@@ -132,12 +132,11 @@ function buildSentimentTimeline(
   }));
 }
 
-
-
 export default function ReviewsAnalysis() {
   const [dashboard, setDashboard] = useState<DashboardSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean | null>(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -146,6 +145,24 @@ export default function ReviewsAnalysis() {
         setError(null);
 
         const baseUrl = "http://localhost:8000"; // или через env, если хочешь
+        // Проверяем глобальный флаг анализа
+        try {
+          const ia = await fetch(`${baseUrl}/api/dashboard/is-analyzing`, { method: "GET", cache: "no-store" });
+          if (ia.ok) {
+            const j = await ia.json();
+            if (j?.is_analyzing) {
+              setIsAnalyzing(true);
+              setDashboard(null);
+              setLoading(false);
+              return; // не выполняем запрос summary
+            }
+            setIsAnalyzing(false);
+          }
+        } catch (e) {
+          // не критично — продолжаем
+          setIsAnalyzing(false);
+        }
+
         const today = new Date();
 
         const endDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -194,50 +211,44 @@ export default function ReviewsAnalysis() {
   }, []);
 
   const sentimentData =
-    dashboard && dashboard.sentiment_distribution
-      ? buildSentimentData(
-          dashboard.sentiment_distribution,
-          dashboard.total_reviews,
-        )
+    isAnalyzing
+      ? []
+      : dashboard && dashboard.sentiment_distribution
+      ? buildSentimentData(dashboard.sentiment_distribution, dashboard.total_reviews)
       : defaultSentimentData;
 
   const sentimentTimeline =
-    dashboard && dashboard.daily_counts
+    isAnalyzing
+      ? []
+      : dashboard && dashboard.daily_counts
       ? buildSentimentTimeline(dashboard.daily_counts)
       : defaultSentimentTimeline;
 
   const topicsData =
-    dashboard &&
-    (dashboard.top_positive_themes.length > 0 ||
-      dashboard.top_negative_themes.length > 0)
+    isAnalyzing
+      ? []
+      : dashboard &&
+        (dashboard.top_positive_themes.length > 0 || dashboard.top_negative_themes.length > 0)
       ? [
-          ...dashboard.top_positive_themes.map((t) => ({
-            name: t.topic,
-            count: t.count,
-            sentiment: "positive" as const,
-          })),
-          ...dashboard.top_negative_themes.map((t) => ({
-            name: t.topic,
-            count: t.count,
-            sentiment: "negative" as const,
-          })),
+          ...dashboard.top_positive_themes.map((t) => ({ name: t.topic, count: t.count, sentiment: "positive" as const })),
+          ...dashboard.top_negative_themes.map((t) => ({ name: t.topic, count: t.count, sentiment: "negative" as const })),
         ].sort((a, b) => b.count - a.count)
       : defaultTopicsData;
 
   const commonComplaints =
-    dashboard && dashboard.top_negative_themes.length
-      ? dashboard.top_negative_themes.map((t) => t.topic)
-      : defaultCommonComplaints;
+    isAnalyzing ? ["-"] : dashboard && dashboard.top_negative_themes.length ? dashboard.top_negative_themes.map((t) => t.topic) : defaultCommonComplaints;
 
   const positiveAspects =
-    dashboard && dashboard.top_positive_themes.length
-      ? dashboard.top_positive_themes.map((t) => t.topic)
-      : defaultPositiveAspects;
-
+    isAnalyzing ? ["-"] : dashboard && dashboard.top_positive_themes.length ? dashboard.top_positive_themes.map((t) => t.topic) : defaultPositiveAspects;
 
   return (
     <Layout>
       <div className="space-y-8">
+        {isAnalyzing === true && (
+          <div className="rounded-md border border-orange-300 bg-orange-50 p-4 text-orange-900">
+            <strong>Идёт анализ данных.</strong> Попробуйте позже.
+          </div>
+        )}
         {/* Page Header */}
         <div className="space-y-2">
           <h1 className="text-4xl font-bold text-primary-900">
@@ -252,34 +263,20 @@ export default function ReviewsAnalysis() {
         <div className="grid gap-4 md:grid-cols-4">
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">Всего отзывов</p>
-            <p className="text-3xl font-bold text-primary-900">
-              {dashboard ? dashboard.total_reviews : "1 247"}
-            </p>
+            <p className="text-3xl font-bold text-primary-900">{isAnalyzing ? "-" : dashboard ? dashboard.total_reviews : "1 247"}</p>
           </div>
           <div className="card-elevated space-y-2 p-6">
             <p className="text-sm font-medium text-primary-600">Средняя тональность</p>
-            <p className="text-3xl font-bold text-primary-900">
-              {dashboard ? dashboard.avg_sentiment_score.toFixed(2) : "4.20"}
-            </p>
+            <p className="text-3xl font-bold text-primary-900">{isAnalyzing ? "-" : dashboard ? dashboard.avg_sentiment_score.toFixed(2) : "4.20"}</p>
           </div>
           <div className="card-elevated space-y-2 p-6">
-            <p className="text-sm font-medium text-primary-600">
-              Ключевые темы
-            </p>
-            <p className="text-3xl font-bold text-primary-900">
-              {dashboard ? dashboard.total_themes : "12"}
-            </p>
-
+            <p className="text-sm font-medium text-primary-600">Ключевые темы</p>
+            <p className="text-3xl font-bold text-primary-900">{isAnalyzing ? "-" : dashboard ? dashboard.total_themes : "12"}</p>
             <p className="text-xs text-primary-500">Категорий определено</p>
           </div>
           <div className="card-elevated space-y-2 p-6">
-            <p className="text-sm font-medium text-primary-600">
-              Критические проблемы
-            </p>
-            <p className="text-3xl font-bold text-orange-600">
-              {dashboard ? dashboard.non_positive_themes : "8"}
-            </p>
-
+            <p className="text-sm font-medium text-primary-600">Критические проблемы</p>
+            <p className="text-3xl font-bold text-orange-600">{isAnalyzing ? "-" : dashboard ? dashboard.non_positive_themes : "8"}</p>
             <p className="text-xs text-orange-600">Требуют внимания</p>
           </div>
         </div>
@@ -291,25 +288,29 @@ export default function ReviewsAnalysis() {
             <h2 className="mb-4 text-lg font-semibold text-primary-900">
               Распределение тональности
             </h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={sentimentData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name} ${value}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {sentimentData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {isAnalyzing ? (
+              <div className="flex h-72 items-center justify-center text-2xl">-</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={sentimentData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value }) => `${name} ${value}%`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {sentimentData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Sentiment Trend */}
@@ -317,41 +318,27 @@ export default function ReviewsAnalysis() {
             <h2 className="mb-4 text-lg font-semibold text-primary-900">
               Тренд тональности
             </h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={sentimentTimeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                <XAxis dataKey="date" stroke="#0096c7" />
-                <YAxis stroke="#0096c7" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#ffffff",
-                    border: "1px solid #90e0ef",
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="positive"
-                  stroke="#00b4d8"
-                  strokeWidth={2}
-                  name="Позитивные"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="neutral"
-                  stroke="#90e0ef"
-                  strokeWidth={2}
-                  name="Нейтральные"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="negative"
-                  stroke="#0096c7"
-                  strokeWidth={2}
-                  name="Негативные"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {isAnalyzing ? (
+              <div className="flex h-72 items-center justify-center text-2xl">-</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={sentimentTimeline}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                  <XAxis dataKey="date" stroke="#0096c7" />
+                  <YAxis stroke="#0096c7" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #90e0ef",
+                    }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="positive" stroke="#00b4d8" strokeWidth={2} name="Позитивные" />
+                  <Line type="monotone" dataKey="neutral" stroke="#90e0ef" strokeWidth={2} name="Нейтральные" />
+                  <Line type="monotone" dataKey="negative" stroke="#0096c7" strokeWidth={2} name="Негативные" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -362,20 +349,20 @@ export default function ReviewsAnalysis() {
             <h2 className="mb-4 text-lg font-semibold text-primary-900">
               Топ тем по упоминаниям
             </h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topicsData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" />
-                <YAxis stroke="#0096c7" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#ffffff",
-                    border: "1px solid #90e0ef",
-                  }}
-                />
-                <Bar dataKey="count" fill="#0096c7" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {isAnalyzing ? (
+              <div className="flex h-72 items-center justify-center text-2xl">-</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={topicsData}
+                 margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                  <XAxis dataKey="name" angle={-45} textAnchor="end" />
+                  <YAxis stroke="#0096c7" />
+                  <Tooltip contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #90e0ef" }} />
+                  <Bar dataKey="count" fill="#0096c7" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Topic Details */}
@@ -384,36 +371,31 @@ export default function ReviewsAnalysis() {
               Детали тем
             </h2>
             <div className="space-y-3">
-              {topicsData.map((topic) => (
-                <div
-                  key={topic.name}
-                  className="flex items-center justify-between rounded-lg border border-primary-200 bg-white p-3"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-primary-900">
-                      {topic.name}
-                    </p>
-                    <p className="text-xs text-primary-600">
-                      {topic.count} упоминаний
-                    </p>
-                  </div>
-                  <div
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      topic.sentiment === "positive"
-                        ? "bg-blue-100 text-blue-700"
-                        : topic.sentiment === "negative"
+              {isAnalyzing
+                ? ["-"].map((_, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-lg border border-primary-200 bg-white p-3">
+                      <div className="flex-1">
+                        <p className="font-medium text-primary-900">-</p>
+                        <p className="text-xs text-primary-600">-</p>
+                      </div>
+                      <div className={`rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700`}>-</div>
+                    </div>
+                  ))
+                : topicsData.map((topic) => (
+                    <div key={topic.name} className="flex items-center justify-between rounded-lg border border-primary-200 bg-white p-3">
+                      <div className="flex-1">
+                        <p className="font-medium text-primary-900">{topic.name}</p>
+                        <p className="text-xs text-primary-600">{topic.count} упоминаний</p>
+                      </div>
+                      <div className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        topic.sentiment === "positive"
+                          ? "bg-blue-100 text-blue-700"
+                          : topic.sentiment === "negative"
                           ? "bg-orange-100 text-orange-700"
                           : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {topic.sentiment === "positive"
-                      ? "позитивное"
-                      : topic.sentiment === "negative"
-                        ? "негативное"
-                        : "смешанное"}
-                  </div>
-                </div>
-              ))}
+                      }`}>{topic.sentiment === "positive" ? "позитивное" : topic.sentiment === "negative" ? "негативное" : "смешанное"}</div>
+                    </div>
+                  ))}
             </div>
           </div>
         </div>
@@ -430,12 +412,9 @@ export default function ReviewsAnalysis() {
             </div>
             <div className="space-y-3">
               {commonComplaints.map((complaint, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50/50 p-3"
-                >
+                <div key={idx} className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
                   <div className="mt-1 h-2 w-2 rounded-full bg-orange-600" />
-                  <p className="text-sm text-primary-900">{complaint}</p>
+                  <p className="text-sm text-primary-900">{isAnalyzing ? "-" : complaint}</p>
                 </div>
               ))}
             </div>
@@ -451,12 +430,9 @@ export default function ReviewsAnalysis() {
             </div>
             <div className="space-y-3">
               {positiveAspects.map((aspect, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50/50 p-3"
-                >
+                <div key={idx} className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50/50 p-3">
                   <div className="mt-1 h-2 w-2 rounded-full bg-green-600" />
-                  <p className="text-sm text-primary-900">{aspect}</p>
+                  <p className="text-sm text-primary-900">{isAnalyzing ? "-" : aspect}</p>
                 </div>
               ))}
             </div>

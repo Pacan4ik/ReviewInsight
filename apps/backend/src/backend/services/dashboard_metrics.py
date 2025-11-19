@@ -162,3 +162,23 @@ async def get_all_daily_counts(
         "нейтральная": await get_daily_counts_by_sentiment(db, start_ts, end_excl, "нейтральная"),
         "отрицательная": await get_daily_counts_by_sentiment(db, start_ts, end_excl, "отрицательная"),
     }
+
+
+async def get_count_reviews(db: AsyncSession, start_ts: datetime, end_excl: datetime) -> tuple[int, int, int]:
+    res = await db.execute(
+        text(
+            """
+            SELECT r.overall_sentiment AS s, COUNT(*) AS cnt
+            FROM reviews r
+            WHERE r.review_created_at >= :start AND r.review_created_at < :end
+            GROUP BY r.overall_sentiment
+            """
+        ),
+        {"start": start_ts, "end": end_excl},
+    )
+    rows = res.fetchall()
+    counts = {"положительная": 0, "отрицательная": 0, "нейтральная": 0}
+    for s, cnt in rows:
+        if s in counts:
+            counts[s] = int(cnt or 0)
+    return (counts["положительная"], counts["отрицательная"], counts["нейтральная"])

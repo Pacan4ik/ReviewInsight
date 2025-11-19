@@ -1,51 +1,8 @@
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Download, Lightbulb, BarChart3, FileText, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";  // <--- НОВОЕ
+import { Download, Lightbulb, BarChart3, FileText } from "lucide-react";
+import { useEffect, useState } from "react";
 
-
-const recommendations = [
-  {
-    priority: "High",
-    title: "Реализуйте более быструю доставку",
-    description:
-      "42% жалоб упоминают задержки доставки. Предложение экспресс-доставки может улучшить удовлетворённость на 15-20%.",
-    impact: "Удовлетворённость +18%",
-    effort: "Среднее",
-  },
-  {
-    priority: "High",
-    title: "Улучшите контроль качества",
-    description:
-      "Повреждённые товары при доставке - вторая по частоте жалоба (38 упоминаний). Усиливайте процедуры контроля качества.",
-    impact: "Возвраты -25%",
-    effort: "Высокое",
-  },
-  {
-    priority: "Medium",
-    title: "Улучшите описания товаров",
-    description:
-      "Неясные описания товаров упоминаются в 23% отзывов. Добавьте детальные спецификации и изображения.",
-    impact: "Возвраты -12%",
-    effort: "Низкое",
-  },
-  {
-    priority: "Medium",
-    title: "Расширьте часы поддержки",
-    description:
-      "Сложно связаться с поддержкой упоминается 28 раз. Поддержка 24/7 или чатбот помогли бы решить эту проблему.",
-    impact: "Удовлетворённость поддержкой +22%",
-    effort: "Среднее",
-  },
-  {
-    priority: "Low",
-    title: "Создайте программу лояльности",
-    description:
-      "Клиентам нравится хорошее соотношение цены и качества. Программа вознаграждений может увеличить удержание на 10%.",
-    impact: "Удержание +10%",
-    effort: "Среднее",
-  },
-];
 
 const executiveSummary = {
   totalReviews: 1247,
@@ -76,15 +33,59 @@ type FeedbackReportResponse = {
   proposal_text: string;
 };
 
-
-
-
 export default function RecommendationsReports() {
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReportResponse | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(true);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean | null>(null);
+
+  // Новое состояние: brief summary, инициализируем прежними статичными данными как fallback
+  const [briefSummary, setBriefSummary] = useState(() => ({
+    totalReviews: executiveSummary.totalReviews,
+    avgRating: executiveSummary.avgRating,
+    mainChallenges: executiveSummary.mainChallenges,
+    strengths: executiveSummary.strengths,
+    timeframe: executiveSummary.timeframe,
+    // sentiment counts
+    positiveCount: 0,
+    neutralCount: 0,
+    negativeCount: 0,
+  }));
 
   useEffect(() => {
+    const fetchBrief = async (baseUrl: string) => {
+      try {
+        const resp = await fetch(`${baseUrl}/api/recommendations/brief`, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          cache: "no-store",
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        // Ожидаем поля: total_reviews, avg_sentiment_score, top_negative_themes, top_positive_themes
+        const totalReviews = typeof data.total_reviews === "number" ? data.total_reviews : briefSummary.totalReviews;
+        const avgRating = typeof data.avg_sentiment_score === "number" ? data.avg_sentiment_score : briefSummary.avgRating;
+
+        const mainChallenges = Array.isArray(data.top_negative_themes)
+          ? data.top_negative_themes.map((t: any) => `${t.topic} (${t.count} упоминания)`)
+          : briefSummary.mainChallenges;
+
+        const strengths = Array.isArray(data.top_positive_themes)
+          ? data.top_positive_themes.map((t: any) => `${t.topic} (${t.count} упоминания)`)
+          : briefSummary.strengths;
+
+        const positiveCount = typeof data.positive_themes === "number" ? data.positive_themes : 0;
+        const negativeCount = typeof data.negative_themes === "number" ? data.negative_themes : 0;
+        const neutralCount = typeof data.neutral_themes === "number" ? data.neutral_themes : 0;
+
+        setBriefSummary({ totalReviews, avgRating, mainChallenges, strengths, timeframe: briefSummary.timeframe, positiveCount, negativeCount, neutralCount });
+      } catch (e) {
+        // Если не удалось получить brief — оставляем прежние данные
+        console.error("Failed to load brief summary:", e);
+      }
+    };
+
     const fetchFeedback = async () => {
       try {
         setFeedbackLoading(true);
@@ -92,6 +93,27 @@ export default function RecommendationsReports() {
 
         // Можно через env-переменную, чтобы не хардкодить бэкенд-URL
         const baseUrl = "http://localhost:8000";
+
+        // Сначала проверяем, не идёт ли глобальный анализ
+        try {
+          const ia = await fetch(`${baseUrl}/api/dashboard/is-analyzing`, { method: "GET", cache: "no-store" });
+          if (ia.ok) {
+            const j = await ia.json();
+            if (j?.is_analyzing) {
+              setIsAnalyzing(true);
+              setFeedbackError("Идёт анализ данных. Попробуйте позже.");
+              setFeedbackLoading(false);
+              return; // не делаем дальнейших запросов
+            }
+            setIsAnalyzing(false);
+          }
+        } catch (e) {
+          // если проверка упала — считаем, что анализ не идёт и продолжаем
+          setIsAnalyzing(false);
+        }
+
+        // Загруем сначала brief (чтобы сразу отрисовать executive summary), затем рекомендации
+        await fetchBrief(baseUrl);
 
         const resp = await fetch(`${baseUrl}/api/recommendations/feedback-report`, {
           method: "GET",
@@ -117,6 +139,7 @@ export default function RecommendationsReports() {
 
     fetchFeedback();
   }, []);
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -130,22 +153,31 @@ export default function RecommendationsReports() {
           </p>
         </div>
 
+        {/* Если идёт глобальный анализ — показываем уведомление и блокируем действия */}
+        {isAnalyzing === true && (
+          <div className="rounded-md border border-orange-300 bg-orange-50 p-4 text-orange-900">
+            <strong>Идёт анализ данных.</strong> Попробуйте позже.
+          </div>
+        )}
+
         {/* Export Options */}
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button className="flex-1 bg-primary-600 hover:bg-primary-700 sm:flex-none">
+          <Button disabled={isAnalyzing === true} className={`flex-1 bg-primary-600 hover:bg-primary-700 sm:flex-none ${isAnalyzing === true ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <Download className="h-4 w-4" />
             Экспортировать в PDF
           </Button>
           <Button
+            disabled={isAnalyzing === true}
             variant="outline"
-            className="flex-1 border-primary-300 text-primary-600 hover:bg-primary-50 sm:flex-none"
+            className={`flex-1 border border-primary-300 text-primary-600 hover:bg-primary-50 sm:flex-none ${isAnalyzing === true ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Download className="h-4 w-4" />
             Экспортировать в Excel
           </Button>
           <Button
+            disabled={isAnalyzing === true}
             variant="outline"
-            className="flex-1 border-primary-300 text-primary-600 hover:bg-primary-50 sm:flex-none"
+            className={`flex-1 border border-primary-300 text-primary-600 hover:bg-primary-50 sm:flex-none ${isAnalyzing === true ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Download className="h-4 w-4" />
             Скачать отчёт
@@ -165,7 +197,8 @@ export default function RecommendationsReports() {
                 Период анализа
               </p>
               <p className="mt-2 text-lg font-bold text-primary-900">
-                {executiveSummary.timeframe}
+                  {isAnalyzing && "—"}
+                  {!isAnalyzing && briefSummary.timeframe}
               </p>
             </div>
             <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-4">
@@ -173,7 +206,8 @@ export default function RecommendationsReports() {
                 Проанализировано отзывов
               </p>
               <p className="mt-2 text-lg font-bold text-primary-900">
-                {executiveSummary.totalReviews}
+                  {isAnalyzing && "—"}
+                  {!isAnalyzing && briefSummary.totalReviews}
               </p>
             </div>
             <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-4">
@@ -181,7 +215,8 @@ export default function RecommendationsReports() {
                 Средний рейтинг
               </p>
               <p className="mt-2 text-lg font-bold text-primary-900">
-                {executiveSummary.avgRating}/5.0
+                    {isAnalyzing && "—"}
+                    {!isAnalyzing && Number(briefSummary.avgRating ?? 0).toFixed(2)}/5.0
               </p>
             </div>
           </div>
@@ -190,7 +225,7 @@ export default function RecommendationsReports() {
             <div className="space-y-3">
               <h3 className="font-semibold text-primary-900">Основные проблемы</h3>
               <div className="space-y-2">
-                {executiveSummary.mainChallenges.map((challenge, idx) => (
+                {!isAnalyzing && briefSummary.mainChallenges.map((challenge, idx) => (
                   <div
                     key={idx}
                     className="flex items-center gap-2 text-primary-700"
@@ -204,7 +239,7 @@ export default function RecommendationsReports() {
             <div className="space-y-3">
               <h3 className="font-semibold text-primary-900">Сильные стороны</h3>
               <div className="space-y-2">
-                {executiveSummary.strengths.map((strength, idx) => (
+                {!isAnalyzing && briefSummary.strengths.map((strength, idx) => (
                   <div
                     key={idx}
                     className="flex items-center gap-2 text-primary-700"
@@ -267,74 +302,61 @@ export default function RecommendationsReports() {
             Панель ключевых метрик
           </h2>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-1">
             <div className="space-y-4">
               <h3 className="font-semibold text-primary-900">Здоровье тональности</h3>
               <div className="space-y-3">
-                <div>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-primary-600">Позитивные</span>
-                    <span className="font-medium text-primary-900">45%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-primary-100">
-                    <div
-                      className="h-full rounded-full bg-green-600"
-                      style={{ width: "45%" }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-primary-600">Нейтральные</span>
-                    <span className="font-medium text-primary-900">30%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-primary-100">
-                    <div
-                      className="h-full rounded-full bg-blue-400"
-                      style={{ width: "30%" }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-primary-600">Негативные</span>
-                    <span className="font-medium text-primary-900">25%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-primary-100">
-                    <div
-                      className="h-full rounded-full bg-orange-600"
-                      style={{ width: "25%" }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+                {(() => {
+                  const p = briefSummary.positiveCount ?? 0;
+                  const n = briefSummary.neutralCount ?? 0;
+                  const ng = briefSummary.negativeCount ?? 0;
+                  const total = p + n + ng;
+                  // fallback to previous static percentages when no data
+                  const posPct = total > 0 ? Math.round((p / total) * 100) : 45;
+                  const neuPct = total > 0 ? Math.round((n / total) * 100) : 30;
+                  const negPct = total > 0 ? 100 - posPct - neuPct : 25; // ensure sums to 100
 
-            <div className="space-y-4">
-              <h3 className="font-semibold text-primary-900">
-                Показатели производительности
-              </h3>
-              <div className="space-y-3">
-                <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-3">
-                  <p className="text-sm text-primary-600">Уровень разрешения</p>
-                  <p className="mt-1 text-2xl font-bold text-primary-900">
-                    87%
-                  </p>
-                </div>
-                <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-3">
-                  <p className="text-sm text-primary-600">Время отклика</p>
-                  <p className="mt-1 text-2xl font-bold text-primary-900">
-                    2.3ч в среднем
-                  </p>
-                </div>
-                <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-3">
-                  <p className="text-sm text-primary-600">
-                    Тренд удовлетворённости клиентов
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-green-600">
-                    ↑ +12%
-                  </p>
-                </div>
+                  return (
+                    <>
+                      <div>
+                        <div className="mb-1 flex justify-between text-sm">
+                          <span className="text-primary-600">Позитивные</span>
+                          <span className="font-medium text-primary-900">{!isAnalyzing && posPct}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-green-600"
+                            style={{ width: `${!isAnalyzing && posPct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-1 flex justify-between text-sm">
+                          <span className="text-primary-600">Нейтральные</span>
+                          <span className="font-medium text-primary-900">{!isAnalyzing && neuPct}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-blue-400"
+                            style={{ width: `${!isAnalyzing && neuPct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-1 flex justify-between text-sm">
+                          <span className="text-primary-600">Негативные</span>
+                          <span className="font-medium text-primary-900">{!isAnalyzing && negPct}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-orange-600"
+                            style={{ width: `${!isAnalyzing && negPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
