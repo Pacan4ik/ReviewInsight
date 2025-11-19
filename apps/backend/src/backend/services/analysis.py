@@ -29,7 +29,7 @@ def analyze_review(review_text: str) -> dict:
     url = "http://ollama:11434/api/generate"
 
     payload = {
-        "model": "deepseek-r1:8b",
+        "model": "qwen2.5:7b-instruct",
         "prompt": review_text,
         "context": [],
         "stream": False,
@@ -92,7 +92,7 @@ def generate_feedback_recommendations(total_reviews: int, topics_dict: dict) -> 
     print(prompt_text)
 
     payload = {
-        "model": "deepseek-r1:8b",
+        "model": "qwen2.5:7b-instruct",
         "prompt": prompt_text,
         "context": [],
         "stream": False,
