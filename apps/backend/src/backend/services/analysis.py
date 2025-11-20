@@ -135,12 +135,11 @@ def _generate_feedback_recommendations_sync(total_reviews: int, topics_dict: dic
         "options": {
             "temperature": 0.7,
             "num_predict": 1200,
-            "top_p": 0.8,
+            "top_p": 0.6,
             "stop": ["```", "###", "System:", "\n\n"],
             "repeat_penalty": 1.1
         }
     }
-    # FIXME still bad insights sometimes
     headers = {"Content-Type": "application/json"}
 
     print(payload)
