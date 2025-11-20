@@ -79,15 +79,34 @@ export default function RecommendationsReports() {
                 const negativeCount = typeof data.negative_themes === "number" ? data.negative_themes : 0;
                 const neutralCount = typeof data.neutral_themes === "number" ? data.neutral_themes : 0;
 
+                // Форматируем период анализа если пришли start_dt / end_dt
+                let timeframe = briefSummary.timeframe;
+                const startRaw = typeof data.start_dt === 'string' ? data.start_dt : null;
+                const endRaw = typeof data.end_dt === 'string' ? data.end_dt : null;
+                if (startRaw || endRaw) {
+                    try {
+                        const start = startRaw ? new Date(startRaw) : null;
+                        const end = endRaw ? new Date(endRaw) : null;
+                        const fmtOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' };
+                        const startStr = start ? start.toLocaleDateString('ru-RU', fmtOpts) : '';
+                        const endStr = end ? end.toLocaleDateString('ru-RU', fmtOpts) : '';
+                        if (startStr && endStr) timeframe = `${startStr} — ${endStr}`;
+                        else if (startStr) timeframe = startStr;
+                        else if (endStr) timeframe = endStr;
+                    } catch (e) {
+                        // оставляем прежний timeframe
+                    }
+                }
+
                 setBriefSummary({
                     totalReviews,
                     avgRating,
                     mainChallenges,
                     strengths,
-                    timeframe: briefSummary.timeframe,
                     positiveCount,
                     negativeCount,
-                    neutralCount
+                    neutralCount,
+                    timeframe
                 });
             } catch (e) {
                 // Если не удалось получить brief — оставляем прежние данные
@@ -206,7 +225,7 @@ export default function RecommendationsReports() {
                             <p className="text-sm font-medium text-primary-600">
                                 Период анализа
                             </p>
-                            <p className="mt-2 text-lg font-bold text-primary-900">
+                            <p className="mt-2 text-base font-bold text-primary-900">
                                 {isAnalyzing && "—"}
                                 {!isAnalyzing && briefSummary.timeframe}
                             </p>
