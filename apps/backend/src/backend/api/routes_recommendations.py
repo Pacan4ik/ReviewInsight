@@ -121,6 +121,8 @@ async def brief_recommendations(
             "avg_sentiment_score": 0.0,
             "top_negative_themes": [],
             "top_positive_themes": [],
+            "start_dt": start_dt,
+            "end_dt": end_dt
         }
 
     top_negative = await get_top_themes(db, start_dt, end_dt, sentiment="отрицательная", limit=3)
@@ -140,4 +142,6 @@ async def brief_recommendations(
         "avg_sentiment_score": avg_sentiment_score,
         "top_negative_themes": top_negative_list,
         "top_positive_themes": top_positive_list,
+        "start_dt": start_dt,
+        "end_dt": end_dt
     }
